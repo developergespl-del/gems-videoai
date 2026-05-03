@@ -3,7 +3,7 @@ import {
   db, videosTable, projectsTable, usersTable, adsTable,
   adminPermissionsTable, adminAuditLogsTable,
 } from "@workspace/db";
-import { eq, count, desc, gte, sum, sql, and, asc } from "drizzle-orm";
+import { eq, count, desc, gte, sum, sql, and, asc, inArray } from "drizzle-orm";
 import { UpdateUserRoleBody, AdminUpdateUserStatusBody, AdminCreateUserBody, SetAdminPermissionsBody } from "@workspace/api-zod";
 import { requireAuth, requireRole } from "../middlewares/auth";
 import bcrypt from "bcryptjs";
@@ -129,7 +129,7 @@ router.get("/admin/users", requireAuth, requireRole("admin", "super_admin"), req
     ? await db
         .select({ userId: videosTable.userId, count: count() })
         .from(videosTable)
-        .where(sql`${videosTable.userId} = ANY(${sql.raw(`ARRAY[${userIds.map((id) => `'${id}'`).join(",")}]::uuid[]`)})`)
+        .where(inArray(videosTable.userId, userIds))
         .groupBy(videosTable.userId)
     : [];
 

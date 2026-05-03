@@ -4,6 +4,12 @@ import { eq, ilike, count, and } from "drizzle-orm";
 import { UpdateUserBody } from "@workspace/api-zod";
 import { requireAuth, requireRole } from "../middlewares/auth";
 
+const ROLE_LEVEL: Record<string, number> = { user: 0, admin: 1, super_admin: 2 };
+
+function canManage(actorRole: string, targetRole: string): boolean {
+  return (ROLE_LEVEL[actorRole] ?? 0) > (ROLE_LEVEL[targetRole] ?? 0);
+}
+
 const router: IRouter = Router();
 
 router.get("/users", requireAuth, requireRole("admin", "super_admin"), async (req, res): Promise<void> => {
@@ -122,9 +128,22 @@ router.patch("/users/:id", requireAuth, async (req, res): Promise<void> => {
 
 router.delete("/users/:id", requireAuth, requireRole("admin", "super_admin"), async (req, res): Promise<void> => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const actorRole = req.user!.role;
 
   if (req.user!.userId === id) {
     res.status(400).json({ error: "Bad request", message: "Cannot delete your own account" });
+    return;
+  }
+
+  // Fetch target to enforce role hierarchy (admin cannot delete super_admin)
+  const [target] = await db.select({ role: usersTable.role }).from(usersTable).where(eq(usersTable.id, id));
+  if (!target) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  if (!canManage(actorRole, target.role)) {
+    res.status(403).json({ error: "Forbidden", message: "Cannot delete a user with equal or higher privileges" });
     return;
   }
 

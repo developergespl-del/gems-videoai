@@ -363,14 +363,24 @@ router.patch("/admin/offers/:id", requireAuth, requireRole("super_admin"), async
     return;
   }
 
-  const [updated] = await db.update(offersTable).set(updates).where(eq(offersTable.id, id)).returning();
-  if (!updated) {
+  // Fetch the current record so we can pre-validate the merged date range
+  const [existing] = await db.select().from(offersTable).where(eq(offersTable.id, id)).limit(1);
+  if (!existing) {
     res.status(404).json({ error: "Offer not found" });
     return;
   }
-  // Validate startsAt < endsAt after merging
-  if (updated.endsAt <= updated.startsAt) {
-    res.status(400).json({ error: "endsAt must be after startsAt (after merge)" });
+
+  // Validate endsAt > startsAt using merged values BEFORE writing to DB
+  const mergedStartsAt = updates.startsAt ?? existing.startsAt;
+  const mergedEndsAt = updates.endsAt ?? existing.endsAt;
+  if (mergedEndsAt <= mergedStartsAt) {
+    res.status(400).json({ error: "endsAt must be after startsAt" });
+    return;
+  }
+
+  const [updated] = await db.update(offersTable).set(updates).where(eq(offersTable.id, id)).returning();
+  if (!updated) {
+    res.status(404).json({ error: "Offer not found" });
     return;
   }
   res.json(buildOffer(updated));

@@ -14,14 +14,18 @@ const app: Express = express();
 
 // ── Security headers (HSTS, X-Content-Type-Options, X-Frame-Options, etc.) ──
 app.use(helmet(helmetConfig));
-app.get("/api", (req, res) => {
-  res.send("API WORKING 🚀");
-});
-app.post("/video", (req, res) => {
-  res.json({ message: "VIDEO ROUTE WORKING 🚀" });
-});
 // ── CORS ─────────────────────────────────────────────────────────────────────
-app.use(cors());
+// In production set CORS_ORIGIN to your frontend URL, e.g.:
+//   CORS_ORIGIN=https://gems-frontend.up.railway.app
+// Multiple origins: comma-separated.  Unset → allow all (dev-friendly default).
+const corsOriginEnv = process.env["CORS_ORIGIN"];
+const corsOptions = corsOriginEnv
+  ? {
+      origin: corsOriginEnv.split(",").map((o) => o.trim()).filter(Boolean),
+      credentials: true,
+    }
+  : { origin: true, credentials: true };
+app.use(cors(corsOptions));
 
 // ── Anti-bot protection ───────────────────────────────────────────────────────
 app.use(antiBotMiddleware);
